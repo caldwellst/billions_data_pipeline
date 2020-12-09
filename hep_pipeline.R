@@ -6,11 +6,13 @@ df <- load_billion_data("hep") %>%
   transform_hep_data() %>%
   calculate_hep_components()
 
-write_csv(df, "output/hep/hep_components.csv")
+write_csv(df, "output/hep/hep_components.csv",
+          na = "")
 
 bill_df <- calculate_hep_billion(df)
 
-write_csv(bill_df, "output/hep/hep_billions.csv")
+write_csv(bill_df, "output/hep/hep_billions.csv",
+          na = "")
 
 ## Wrangling for dashboard
 
