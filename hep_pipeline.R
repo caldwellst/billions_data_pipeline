@@ -98,7 +98,8 @@ bill_df %>%
               type == "reported" ~ "Actual",
               TRUE ~ type
             )) %>%
-  filter(!is.na(Indicator_FK)) %>%
+  filter(!is.na(Indicator_FK),
+         !(Indicator_FK) %in% c("HE_detect", "HE_notify", "HE_respond")) %>%
   write_csv("output/hep/hep_dashboard_upload.csv",
             na = "")
 
