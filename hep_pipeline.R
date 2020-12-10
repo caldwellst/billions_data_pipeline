@@ -16,6 +16,17 @@ write_csv(bill_df, "output/hep/hep_billions.csv",
 
 ## Wrangling for dashboard
 
+# Fake DNR data for dashboard for missing countries
+
+dnr_df <- expand_grid(iso3 = who_member_states(),
+                      Year_FK = 2018:2023) %>%
+  mutate(GeoAreaFK = iso3_to_names(iso3),
+         Low_Level_Category = "Detect and Respond",
+         High_Level_Category = "Detect and Respond",
+         Indicator_FK = "HE_events")
+
+# output for dashboard
+
 bill_df %>%
   filter(ind == "hep_idx") %>%
   transmute(iso3,
@@ -99,7 +110,9 @@ bill_df %>%
               TRUE ~ type
             )) %>%
   filter(!is.na(Indicator_FK),
-         !(Indicator_FK) %in% c("HE_detect", "HE_notify", "HE_respond")) %>%
+         !(Indicator_FK) %in% c("HE_detect", "HE_notify", "HE_respond"),
+         Year_FK <= 2023) %>%
+  full_join(dnr_df) %>%
   write_csv("output/hep/hep_dashboard_upload.csv",
             na = "")
 
