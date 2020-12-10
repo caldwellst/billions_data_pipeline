@@ -31,7 +31,7 @@ bill_df %>%
             Year_FK = year,
             iso3,
             GeoArea_FK = iso3_to_names(iso3),
-            Actual_Value = transform_value,
+            Actual_Value = round(transform_value, 1),
             Country_Share = NA,
             Gap_Contr_Country_Share = NA,
             Contr_Perc_Country_Share = NA,
