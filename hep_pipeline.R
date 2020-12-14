@@ -2,14 +2,16 @@ library(billionaiRe)
 library(tidyverse)
 library(whoville)
 
-df <- load_billion_data("hep") %>%
+df <- load_billion_data("hep") 
+
+trans_df <- df %>%
   transform_hep_data() %>%
   calculate_hep_components()
 
-write_csv(df, "output/hep/hep_components.csv",
+write_csv(trans_df, "output/hep/hep_components.csv",
           na = "")
 
-bill_df <- calculate_hep_billion(df)
+bill_df <- calculate_hep_billion(trans_df)
 
 write_csv(bill_df, "output/hep/hep_billions.csv",
           na = "")
@@ -20,7 +22,7 @@ write_csv(bill_df, "output/hep/hep_billions.csv",
 
 dnr_df <- expand_grid(iso3 = who_member_states(),
                       Year_FK = 2018:2023) %>%
-  mutate(GeoAreaFK = iso3_to_names(iso3),
+  mutate(GeoArea_FK = iso3_to_names(iso3),
          Low_Level_Category = "Detect and Respond",
          High_Level_Category = "Detect and Respond",
          Indicator_FK = "HE_events")
@@ -33,10 +35,10 @@ bill_df %>%
             year,
             ind = "hep_num",
             transform_value = contribution) %>%
-  bind_rows(calculate_hep_billion(df, end_year = 2019) %>%
+  bind_rows(calculate_hep_billion(trans_df, end_year = 2019) %>%
               filter(ind == "hep_idx") %>%
               transmute(iso3, year, ind = "hep_num", transform_value = contribution)) %>%
-  bind_rows(df) %>%
+  bind_rows(trans_df) %>%
   transmute(Indicator_FK = convert_ind_codes(ind, "analysis_code", "dashboard_id"),
             ind,
             Year_FK = year,
@@ -114,5 +116,85 @@ bill_df %>%
          Year_FK <= 2023) %>%
   full_join(dnr_df) %>%
   write_csv("output/hep/hep_dashboard_upload.csv",
+            na = "")
+# Scenario tools data
+
+dnr_st <- trans_df %>%
+  filter(year == 2023,
+         ind == "detect_respond")
+
+prep_st <- trans_df %>%
+  filter(year %in% c(2018, 2023),
+         ind == "espar")
+
+prep_comp_base_st <- trans_df %>%
+  filter(str_detect(ind, "espar[0-9]{2}"),
+         year %in% 2018:2019) %>%
+  group_by(iso3, ind) %>%
+  filter(!(n() > 1 & year == 2019)) %>%
+  ungroup() %>%
+  mutate(prep_comp_year = year,
+         year = 2018) 
+
+prep_comp_st <- trans_df %>%
+  filter(str_detect(ind, "espar[0-9]{2}")) %>%
+  group_by(iso3, ind) %>%
+  filter(year == max(year)) %>%
+  ungroup() %>%
+  mutate(prep_comp_year = year,
+         year = 2023) %>%
+  bind_rows(prep_comp_base_st)
+
+prev_cmpgn_st <- df %>%
+  transform_hep_data(cholera_latest_year = 2023,
+                     meningitis_latest_year = 2023,
+                     yellow_fever_latest_year = 2023) %>%
+  filter(str_detect(ind, "campaign"),
+         year %in% c(2018, 2023))
+  
+prev_rtne_st <- trans_df %>%
+  filter(year %in% c(2018, 2023),
+         str_detect(ind, "routine|infants") | ind == "prevent") %>%
+  group_by(iso3, year) %>%
+  mutate(transform_value = ifelse(str_detect(ind, "routine"),
+                                  100 * transform_value / transform_value[ind == "surviving_infants"],
+                                  transform_value)) %>%
+  ungroup()
+
+hep_idx_st <- trans_df %>%
+  filter(ind == "hep_idx",
+         year %in% c(2018, 2023))
+
+st_df <- bind_rows(dnr_st, prep_st, prep_comp_st, prev_cmpgn_st, prev_rtne_st, hep_idx_st) %>%
+  pivot_wider(c(iso3, year, ind),
+              names_from = year,
+              values_from = c(transform_value, level, prep_comp_year)) %>%
+  left_join(bill_df, by = c("iso3", "ind")) %>%
+  transmute(Country_ISO3Code = iso3,
+            Indicator_CODE_Technical_ID = convert_ind_codes(ind, from = "analysis_code", to = "dashboard_id"),
+            HE_Raw_Value_2018 = transform_value_2018,
+            HE_Raw_Value_2019 = NA,
+            HE_Raw_Value_2020 = NA,
+            HE_Raw_Value_2021 = NA,
+            HE_Raw_Value_2023 = NA,
+            HE_Raw_Value_2023 = transform_value_2023,
+            Contributions_2023 = contribution,
+            ACTUAL_LEVEL_2018 = level_2018,
+            ACTUAL_LEVEL_2023 = level_2023,
+            Prepare_Component_Base_Year = prep_comp_year_2018,
+            Prepare_Component_Latest_Year = prep_comp_year_2023,
+            Population_2023 = wppdistro::get_population(iso3, 2023)) 
+
+cmpgn_st <- st_df %>%
+  filter(str_detect(Indicator_CODE_Technical_ID, "Camp")) %>%
+  mutate(across(contains("Raw_Value"),
+                ~NA))
+
+st_df %>%
+  mutate(Indicator_CODE_Technical_ID = ifelse(str_detect(Indicator_CODE_Technical_ID, "Camp"),
+                                              paste0(Indicator_CODE_Technical_ID, "_Internal"),
+                                              Indicator_CODE_Technical_ID)) %>%
+  bind_rows(cmpgn_st) %>%
+  write_csv("output/hep/scenario_tools_load.csv",
             na = "")
 
