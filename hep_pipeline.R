@@ -117,10 +117,11 @@ bill_df %>%
   full_join(dnr_df) %>%
   write_csv("output/hep/hep_dashboard_upload.csv",
             na = "")
+
 # Scenario tools data
 
 dnr_st <- trans_df %>%
-  filter(year == 2023,
+  filter(year %in% c(2018, 2023),
          ind == "detect_respond")
 
 prep_st <- trans_df %>%
@@ -150,7 +151,7 @@ prev_cmpgn_st <- df %>%
                      meningitis_latest_year = 2023,
                      yellow_fever_latest_year = 2023) %>%
   filter(str_detect(ind, "campaign"),
-         year %in% c(2018, 2023))
+         year %in% c(2018, 2019, 2023))
   
 prev_rtne_st <- trans_df %>%
   filter(year %in% c(2018, 2023),
@@ -173,7 +174,7 @@ st_df <- bind_rows(dnr_st, prep_st, prep_comp_st, prev_cmpgn_st, prev_rtne_st, h
   transmute(Country_ISO3Code = iso3,
             Indicator_CODE_Technical_ID = convert_ind_codes(ind, from = "analysis_code", to = "dashboard_id"),
             HE_Raw_Value_2018 = transform_value_2018,
-            HE_Raw_Value_2019 = NA,
+            HE_Raw_Value_2019 = transform_value_2019,
             HE_Raw_Value_2020 = NA,
             HE_Raw_Value_2021 = NA,
             HE_Raw_Value_2023 = NA,
@@ -181,8 +182,8 @@ st_df <- bind_rows(dnr_st, prep_st, prep_comp_st, prev_cmpgn_st, prev_rtne_st, h
             Contributions_2023 = contribution,
             ACTUAL_LEVEL_2018 = level_2018,
             ACTUAL_LEVEL_2023 = level_2023,
-            Prepare_Component_Base_Year = prep_comp_year_2018,
-            Prepare_Component_Latest_Year = prep_comp_year_2023,
+            Prepare_Component_Year_2018 = prep_comp_year_2018,
+            Prepare_Component_Year_2023 = prep_comp_year_2023,
             Population_2023 = wppdistro::get_population(iso3, 2023)) 
 
 cmpgn_st <- st_df %>%
@@ -195,6 +196,10 @@ st_df %>%
                                               paste0(Indicator_CODE_Technical_ID, "_Internal"),
                                               Indicator_CODE_Technical_ID)) %>%
   bind_rows(cmpgn_st) %>%
+  pivot_longer(matches("_[0-9]{4}"),
+               names_pattern = "(.*)_([0-9]{4})",
+               names_to = c(".value", "Year_FK")) %>%
+  filter(Year_FK %in% c(2018, 2019, 2023),
+         !(Year_FK == 2019 & !str_detect(Indicator_CODE_Technical_ID, "cholera"))) %>%
   write_csv("output/hep/scenario_tools_load.csv",
             na = "")
-
